@@ -1737,10 +1737,12 @@ class _AddSalesInvoiceScreenState extends State<AddSalesInvoiceScreen>
 
   List<_ExtraItem> extraItems = [];
   DateTime selectedDate = DateTime.now();
+  late TextEditingController invoiceNoController;
 
   @override
   void initState() {
     super.initState();
+    invoiceNoController = TextEditingController(text: widget.nextOrderId);
     _loadSalesmanAndOrders(); // This now calls _loadOrders internally after areas are loaded
     Future.microtask(() {
       Provider.of<SaleInvoicesProvider>(
@@ -1798,6 +1800,7 @@ class _AddSalesInvoiceScreenState extends State<AddSalesInvoiceScreen>
     _shimmerController.dispose();
     qtyController.dispose();
     rateController.dispose();
+    invoiceNoController.dispose();
     super.dispose();
   }
 
@@ -2188,7 +2191,7 @@ class _AddSalesInvoiceScreenState extends State<AddSalesInvoiceScreen>
     );
 
     final body = {
-      "inv_no": widget.nextOrderId,
+      "inv_no": invoiceNoController.text.trim(),
       "sales_order_id": (isDirectSource || isLoadSheetSource)
           ? null
           : provider.selectedOrder?.id,
@@ -2275,7 +2278,7 @@ class _AddSalesInvoiceScreenState extends State<AddSalesInvoiceScreen>
       appBar: _buildAppBar(),
       body: provider.isLoading
           ? _buildShimmerEffect(child: _buildShimmerLoading())
-          : Padding(
+          : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2284,8 +2287,8 @@ class _AddSalesInvoiceScreenState extends State<AddSalesInvoiceScreen>
                   _buildSourceSelector(),
                   const SizedBox(height: 12),
 
-                  // ── Invoice Date ──
-                  _buildDateField(),
+                  // ── Invoice Date & Number ──
+                  _buildInvoiceNoAndDateField(),
                   const SizedBox(height: 12),
 
                   // ── Order / LoadSheet Dropdown ──
@@ -2323,43 +2326,37 @@ class _AddSalesInvoiceScreenState extends State<AddSalesInvoiceScreen>
 
                   if (!hasContentToShow &&
                       (showNoSalesOrders || showNoLoadSheets))
-                    Expanded(child: _buildNoOrdersWidget()),
+                    _buildNoOrdersWidget(),
 
                   // ── Items Section ──
                   if (hasContentToShow) ...[
                     _buildItemsHeader(total),
                     const SizedBox(height: 8),
 
-                    Expanded(
-                      child: ListView(
-                        children: [
-                          if (provider.selectedOrder != null)
-                            ...provider.selectedOrder!.details
-                                .asMap()
-                                .entries
-                                .map(
-                                  (e) => _buildOrderItemCard(e.value, e.key),
-                                ),
+                    if (provider.selectedOrder != null)
+                      ...provider.selectedOrder!.details
+                          .asMap()
+                          .entries
+                          .map(
+                            (e) => _buildOrderItemCard(e.value, e.key),
+                          ),
 
-                          if (extraItems.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            _buildExtraItemsSection(),
-                          ],
+                    if (extraItems.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      _buildExtraItemsSection(),
+                    ],
 
-                          if (_showAddProduct ||
-                              (isDirectSource &&
-                                  extraItems.isEmpty &&
-                                  provider.selectedOrder == null)) ...[
-                            const SizedBox(height: 8),
-                            _buildAddProductPanel(),
-                          ],
+                    if (_showAddProduct ||
+                        (isDirectSource &&
+                            extraItems.isEmpty &&
+                            provider.selectedOrder == null)) ...[
+                      const SizedBox(height: 8),
+                      _buildAddProductPanel(),
+                    ],
 
-                          const SizedBox(height: 12),
-                          _buildBottomBar(total),
-                          const SizedBox(height: 8),
-                        ],
-                      ),
-                    ),
+                    const SizedBox(height: 12),
+                    _buildBottomBar(total),
+                    const SizedBox(height: 8),
                   ],
 
                   if (!hasContentToShow &&
@@ -2377,57 +2374,127 @@ class _AddSalesInvoiceScreenState extends State<AddSalesInvoiceScreen>
   // UI WIDGETS
   // ─────────────────────────────────────────────
 
-  Widget _buildDateField() {
-    return GestureDetector(
-      onTap: () => _selectDate(context),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.08),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.calendar_today,
-              color: AppColors.primary,
-              size: 20,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Invoice Date",
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
+  Widget _buildInvoiceNoAndDateField() {
+    return Row(
+      children: [
+        // Invoice Date
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _selectDate(context),
+            child: Container(
+              height: 58,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                  Text(
-                    DateFormat('dd MMMM yyyy').format(selectedDate),
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E293B),
+                ],
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_today,
+                    color: AppColors.primary,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "Invoice Date",
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          DateFormat('dd MMM yyyy').format(selectedDate),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.edit_calendar, color: Colors.grey, size: 20),
-          ],
+          ),
         ),
-      ),
+        const SizedBox(width: 12),
+        // Invoice No
+        Expanded(
+          child: Container(
+            height: 58,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.receipt_long,
+                  color: AppColors.primary,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Invoice No",
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Expanded(
+                        child: TextFormField(
+                          controller: invoiceNoController,
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -3308,7 +3375,8 @@ class _AddSalesInvoiceScreenState extends State<AddSalesInvoiceScreen>
   }
 
   Widget _buildEmptyState() {
-    return Expanded(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

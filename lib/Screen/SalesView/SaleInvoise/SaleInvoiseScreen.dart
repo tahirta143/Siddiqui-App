@@ -37,6 +37,7 @@ class _SaleInvoiseScreenState extends State<SaleInvoiseScreen> {
   bool canAddOrder = false;
   String? _loggedInSalesmanId;
   bool _isSalesmanLocked = false;
+  bool _isFetchingInvoiceNo = false;
 
   Future<void> _loadSalesmanId() async {
     final prefs = await SharedPreferences.getInstance();
@@ -121,12 +122,21 @@ class _SaleInvoiseScreenState extends State<SaleInvoiseScreen> {
         floatingActionButton: canAddOrder
             ? FloatingActionButton.extended(
           elevation: 3,
-          backgroundColor: AppColors.primary,
-          onPressed: _navigateToAddInvoice,
-          icon: const Icon(Icons.add, color: Colors.white),
-          label: const Text(
-            "Add Invoice",
-            style: TextStyle(
+          backgroundColor: _isFetchingInvoiceNo ? Colors.grey : AppColors.primary,
+          onPressed: _isFetchingInvoiceNo ? null : _navigateToAddInvoice,
+          icon: _isFetchingInvoiceNo
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Icon(Icons.add, color: Colors.white),
+          label: Text(
+            _isFetchingInvoiceNo ? "Fetching..." : "Add Invoice",
+            style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w600,
             ),
@@ -249,50 +259,56 @@ class _SaleInvoiseScreenState extends State<SaleInvoiseScreen> {
   }
 
   Future<void> _navigateToAddInvoice() async {
+    if (_isFetchingInvoiceNo) return;
+    setState(() => _isFetchingInvoiceNo = true);
+
     final invoiceProvider = Provider.of<SaleInvoicesProvider>(context, listen: false);
 
-    // 1. Show professional loading dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Center(
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text("Fetching Next Invoice No...",
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    // 2. Fetch from server
+    // 1. Fetch from server
     String? nextInvNo = await invoiceProvider.fetchNextInvoiceNo();
 
-    // 3. Remove dialog
-    if (mounted) Navigator.pop(context);
+    if (mounted) {
+      setState(() => _isFetchingInvoiceNo = false);
+    }
 
-    // 4. Fallback if server fails
+    // 4. Fallback & validation to prevent duplicates
     if (nextInvNo == null) {
       nextInvNo = "INV-0001";
       if (invoiceProvider.orderData != null &&
           invoiceProvider.orderData!.invoices.isNotEmpty) {
         final allNumbers = invoiceProvider.orderData!.invoices.map((invoice) {
           final id = invoice.invNo ?? "";
-          final match = RegExp(r'INV-(\d+)$').firstMatch(id);
-          return match != null ? int.tryParse(match.group(1)!) ?? 0 : 0;
+          final match = RegExp(r'([A-Za-z]+)-(\d+)$').firstMatch(id);
+          return match != null ? int.tryParse(match.group(2)!) ?? 0 : 0;
         }).toList();
         final max = allNumbers.isNotEmpty ? allNumbers.reduce((a, b) => a > b ? a : b) : 0;
         nextInvNo = "INV-${(max + 1).toString().padLeft(4, '0')}";
+      }
+    } else {
+      if (invoiceProvider.orderData != null &&
+          invoiceProvider.orderData!.invoices.isNotEmpty) {
+        bool exists = invoiceProvider.orderData!.invoices.any((invoice) => invoice.invNo == nextInvNo);
+        if (exists) {
+          final allNumbers = invoiceProvider.orderData!.invoices.map((invoice) {
+            final id = invoice.invNo ?? "";
+            final match = RegExp(r'([A-Za-z]+)-(\d+)$').firstMatch(id);
+            return match != null ? int.tryParse(match.group(2)!) ?? 0 : 0;
+          }).toList();
+          final max = allNumbers.isNotEmpty ? allNumbers.reduce((a, b) => a > b ? a : b) : 0;
+
+          final match = RegExp(r'^([A-Za-z]+)-(\d+)$').firstMatch(nextInvNo);
+          if (match != null) {
+            final prefix = match.group(1)!;
+            final numStr = match.group(2)!;
+            final serverNum = int.tryParse(numStr) ?? 0;
+            int finalNum = serverNum > max ? serverNum : (max + 1);
+
+            while (invoiceProvider.orderData!.invoices.any((invoice) => invoice.invNo == "$prefix-${finalNum.toString().padLeft(numStr.length, '0')}")) {
+              finalNum++;
+            }
+            nextInvNo = "$prefix-${finalNum.toString().padLeft(numStr.length, '0')}";
+          }
+        }
       }
     }
 
@@ -578,13 +594,7 @@ class _SaleInvoiseScreenState extends State<SaleInvoiseScreen> {
             if (searchQuery.isEmpty) ...[
               const SizedBox(height: 18),
               ElevatedButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                    const AddSalesInvoiceScreen(nextOrderId: "INV-0001"),
-                  ),
-                ),
+                onPressed: _navigateToAddInvoice,
                 icon: const Icon(Icons.add),
                 label: const Text('Create Invoice'),
                 style: ElevatedButton.styleFrom(

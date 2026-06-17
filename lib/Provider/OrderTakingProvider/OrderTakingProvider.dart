@@ -35,6 +35,7 @@ class OrderTakingProvider with ChangeNotifier {
   }
 
   Future<void> FetchOrderTaking() async {
+    _error = null; // Clear old errors
     if (_isFetched) return;
 
     _isLoading = true;
@@ -104,7 +105,7 @@ class OrderTakingProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> createOrder({
+  Future<bool> createOrder({
     required String orderId,
     required String salesmanId,
     required String customerId,
@@ -113,6 +114,7 @@ class OrderTakingProvider with ChangeNotifier {
     required String status,
     DateTime? orderDate,
   }) async {
+    _error = null; // Clear old errors
     try {
       _isLoading = true;
       notifyListeners();
@@ -124,7 +126,7 @@ class OrderTakingProvider with ChangeNotifier {
         _error = "Token not found!";
         _isLoading = false;
         notifyListeners();
-        return;
+        return false;
       }
 
       final url = Uri.parse('${ApiEndpoints.baseUrl}/sales-orders');
@@ -163,12 +165,15 @@ class OrderTakingProvider with ChangeNotifier {
         debugPrint("✅ Order created: ${response.body}");
         _isFetched = false;
         await FetchOrderTaking();
+        return true;
       } else {
         _error = "❌ Failed: ${response.statusCode} - ${response.body}";
         print(_error);
+        return false;
       }
     } catch (e) {
       _error = "Error: $e";
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -221,6 +226,7 @@ class OrderTakingProvider with ChangeNotifier {
   }
 
   Future<void> updateOrder(String orderId, Map<String, dynamic> body) async {
+    _error = null; // Clear old errors
     try {
       _isLoading = true;
       notifyListeners();
@@ -310,14 +316,15 @@ class OrderTakingProvider with ChangeNotifier {
 
   // so-number form api
 
-  Future<String> fetchNextSoNumber() async {
+  Future<String?> fetchNextSoNumber() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
 
-      // Always fetch ALL orders (no salesman filter) just for SO number
+      if (token == null) return null;
+
       final response = await http.get(
-        Uri.parse('${ApiEndpoints.baseUrl}/sales-orders'),
+        Uri.parse('${ApiEndpoints.baseUrl}/sales-orders/next-so-no'),
         headers: {
           "Accept": "application/json",
           "Authorization": "Bearer $token",
@@ -325,25 +332,17 @@ class OrderTakingProvider with ChangeNotifier {
         },
       );
 
+      debugPrint('📡 Next SO Response: ${response.statusCode} - ${response.body}');
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final allOrders = OrderTakingModel.fromJson(data).data;
-
-        if (allOrders.isEmpty) return 'SO-0001';
-
-        final allNumbers = allOrders.map((order) {
-          final id = order.soNo?.toString() ?? "";
-          final regex = RegExp(r'(?:SO|so)-(\d+)$');
-          final match = regex.firstMatch(id);
-          return match != null ? int.tryParse(match.group(1)!) ?? 0 : 0;
-        }).toList();
-
-        final maxNumber = allNumbers.reduce((a, b) => a > b ? a : b);
-        return 'SO-${(maxNumber + 1).toString().padLeft(4, '0')}';
+        if (data['success'] == true) {
+          return data['data']['next_so_no']?.toString();
+        }
       }
     } catch (e) {
       debugPrint('Error fetching SO number: $e');
     }
-    return 'SO-0001'; // fallback
+    return null;
   }
 }

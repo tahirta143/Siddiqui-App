@@ -997,46 +997,70 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
           setState(() => isLoading = true);
 
           try {
-              await orderProvider.createOrder(
-                orderId: widget.nextOrderId,
-                salesmanId: _salesmanId!,//selectedSalesmanId!,
-                customerId: selectedCustomer!.id.toString(),
-                status: selectedStatus,
-                products: orderItems,
-                salesAreaId: _selectedAreaId,
-                orderDate: selectedDate,
-              );
+            final success = await orderProvider.createOrder(
+              orderId: widget.nextOrderId,
+              salesmanId: _salesmanId!,//selectedSalesmanId!,
+              customerId: selectedCustomer!.id.toString(),
+              status: selectedStatus,
+              products: orderItems,
+              salesAreaId: _selectedAreaId,
+              orderDate: selectedDate,
+            );
 
             if (!mounted) return;
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    const Icon(
-                      Icons.check_circle,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        widget.isUpdate
-                            ? "Order updated successfully!"
-                            : "Order created successfully!",
+            if (success) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const Icon(
+                        Icons.check_circle,
+                        color: Colors.white,
+                        size: 20,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          widget.isUpdate
+                              ? "Order updated successfully!"
+                              : "Order created successfully!",
+                        ),
+                      ),
+                    ],
+                  ),
+                  backgroundColor: Colors.green,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                backgroundColor: Colors.green,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+              );
+              Navigator.pop(context, true);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const Icon(
+                        Icons.error,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(orderProvider.error ?? "Failed to create order"),
+                      ),
+                    ],
+                  ),
+                  backgroundColor: Colors.red,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-              ),
-            );
-
-            Navigator.pop(context, true);
+              );
+            }
           } catch (e) {
             if (!mounted) return;
 

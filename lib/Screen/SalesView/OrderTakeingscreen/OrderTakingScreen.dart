@@ -735,6 +735,18 @@ class _OrderTakingScreenState extends State<OrderTakingScreen> {
 
     if (!mounted) return;
 
+    if (nextOrderId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Failed to fetch next Order ID. Please check your connection."),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
